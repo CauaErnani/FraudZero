@@ -1,5 +1,7 @@
+from datetime import datetime
 from http import HTTPStatus
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -45,6 +47,10 @@ async def login_for_access_token(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail='CNPJ ou senha incorretos',
         )
+
+    # Atualiza o último acesso
+    cliente.ultimo_acesso = datetime.now(tz=ZoneInfo('UTC'))
+    await session.commit()
 
     access_token = create_access_token(
         data={'sub': cliente.cnpj, 'role': 'instituicao'}

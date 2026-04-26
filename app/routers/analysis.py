@@ -1,7 +1,8 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+import numpy as np
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,20 +16,78 @@ router = APIRouter(prefix='/analysis', tags=['analysis'])
 T_Session = Annotated[AsyncSession, Depends(get_session)]
 T_CurrentUser = Annotated[Cliente, Depends(get_current_user)]
 
-FRAUD_THRESHOLD_LIMIT = 8000
-HIGH_RISK_SCORE = 0.95
-LOW_RISK_SCORE = 0.05
+# Ordem exata das features que o modelo espera — deve ser idêntica ao treino
+FEATURE_COLUMNS = [
+    'amount',
+    'oldbalanceOrg',
+    'newbalanceOrig',
+    'oldbalanceDest',
+    'newbalanceDest',
+    'diferenca_saldo_orig',
+    'diferenca_saldo_dest',
+    'type_CASH_IN',
+    'type_CASH_OUT',
+    'type_DEBIT',
+    'type_PAYMENT',
+    'type_TRANSFER',
+]
+
+# Todos os tipos possíveis do PaySim para o One-Hot Encoding
+TRANSACTION_TYPES = [
+    'CASH_IN',
+    'CASH_OUT',
+    'DEBIT',
+    'PAYMENT',
+    'TRANSFER',
+]
+
+
+def build_feature_vector(transacao: TransacaoEntrada) -> np.ndarray:
+    """
+    Recebe os dados brutos da transação e retorna o vetor de features
+    no formato que o modelo XGBoost espera.
+    """
+    # Feature Engineering
+    diferenca_saldo_orig = transacao.oldbalanceOrg - transacao.newbalanceOrig
+    diferenca_saldo_dest = transacao.newbalanceDest - transacao.oldbalanceDest
+
+    # One-Hot Encoding manual do campo 'type'
+    type_encoded = {
+        f'type_{t}': 1.0 if transacao.type == t else 0.0
+        for t in TRANSACTION_TYPES
+    }
+
+    features = {
+        'amount': transacao.amount,
+        'oldbalanceOrg': transacao.oldbalanceOrg,
+        'newbalanceOrig': transacao.newbalanceOrig,
+        'oldbalanceDest': transacao.oldbalanceDest,
+        'newbalanceDest': transacao.newbalanceDest,
+        'diferenca_saldo_orig': diferenca_saldo_orig,
+        'diferenca_saldo_dest': diferenca_saldo_dest,
+        **type_encoded,
+    }
+
+    # Garante a ordem correta das colunas
+    vector = np.array([[features[col] for col in FEATURE_COLUMNS]])
+    return vector
 
 
 @router.post(
     '/analisar/', status_code=HTTPStatus.CREATED, response_model=PredicaoRisco
 )
 async def solicitar_analise(
-    session: T_Session, transacao: TransacaoEntrada, cliente: T_CurrentUser
+    request: Request,
+    session: T_Session,
+    transacao: TransacaoEntrada,
+    cliente: T_CurrentUser,
 ):
-    # 1. Lógica de predição provisória de teste(XGBoost)
-    is_fraud = transacao.amount > FRAUD_THRESHOLD_LIMIT
-    risk_score = HIGH_RISK_SCORE if is_fraud else LOW_RISK_SCORE
+    model = request.app.state.model
+    feature_vector = build_feature_vector(transacao)
+
+    # Predição real com XGBoost
+    is_fraud = bool(model.predict(feature_vector)[0])
+    risk_score = float(model.predict_proba(feature_vector)[0][1])
 
     db_log = LogAnalise(
         dados_entrada=transacao.model_dump_json(),
@@ -49,7 +108,6 @@ async def solicitar_analise(
 
 @router.get('/historico', response_model=list[schemas.LogAnalise])
 async def obter_historico(session: T_Session, cliente: T_CurrentUser):
-    # Os logs são filtrados para que uma empresa não veja os dados da outra
     query = select(LogAnalise).where(LogAnalise.cliente_id == cliente.id)
     result = await session.execute(query)
     return result.scalars().all()

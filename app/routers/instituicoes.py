@@ -65,6 +65,16 @@ async def list_instituicoes(session: T_Session, _: T_CurrentAdmin):
     return result.scalars().all()
 
 
+@router.get('/{id}', response_model=schemas.ClientePublico)
+async def get_instituicao(id: str, session: T_Session, _: T_CurrentAdmin):
+    cliente = await session.get(Cliente, id)
+    if not cliente:
+        raise HTTPException(
+            status_code=404, detail='Instituição não encontrada'
+        )
+    return cliente
+
+
 @router.patch('/{id}/status', response_model=schemas.ClientePublico)
 async def alterar_status_instituicao(
     id: str, session: T_Session, _: T_CurrentAdmin
@@ -79,3 +89,15 @@ async def alterar_status_instituicao(
     await session.commit()
     await session.refresh(cliente)
     return cliente
+
+
+@router.delete('/{id}', status_code=204)
+async def delete_instituicao(id: str, session: T_Session, _: T_CurrentAdmin):
+    cliente = await session.get(Cliente, id)
+    if not cliente:
+        raise HTTPException(
+            status_code=404, detail='Instituição não encontrada'
+        )
+
+    await session.delete(cliente)
+    await session.commit()
