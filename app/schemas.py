@@ -56,7 +56,8 @@ class ClienteBase(BaseModel):
         def calc_digito(cnpj: str, pesos: list[int]) -> int:
             soma = sum(int(cnpj[i]) * pesos[i] for i in range(len(pesos)))
             resto = soma % 11
-            return 0 if resto < 2 else 11 - resto
+            RESTO_MINIMO = 2
+            return 0 if resto < RESTO_MINIMO else 11 - resto
 
         pesos1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
         pesos2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
