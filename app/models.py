@@ -32,7 +32,10 @@ class Cliente:
     )
 
     logs: Mapped[list['LogAnalise']] = relationship(
-        'LogAnalise', back_populates='cliente', init=False
+        'LogAnalise',
+        back_populates='cliente',
+        init=False,
+        cascade='all, delete-orphan',
     )
 
 

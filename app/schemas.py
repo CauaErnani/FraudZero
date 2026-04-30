@@ -41,18 +41,25 @@ class ClienteBase(BaseModel):
     nome_instituicao: str
     cnpj: str = Field(..., min_length=14, max_length=14)
 
+
+class ClientePublico(ClienteBase):
+    id: str
+    ativo: bool
+    data_criacao: datetime
+    ultimo_acesso: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClienteSchema(ClienteBase):
     @field_validator('cnpj')
     @classmethod
     def validar_cnpj(cls, v: str) -> str:
-        # Apenas dígitos
         if not v.isdigit():
             raise ValueError('CNPJ deve conter apenas números')
 
-        # Bloqueia sequências inválidas como 00000000000000
         if len(set(v)) == 1:
             raise ValueError('CNPJ inválido')
 
-        # Validação dos dígitos verificadores
         def calc_digito(cnpj: str, pesos: list[int]) -> int:
             soma = sum(int(cnpj[i]) * pesos[i] for i in range(len(pesos)))
             resto = soma % 11
@@ -68,18 +75,6 @@ class ClienteBase(BaseModel):
             raise ValueError('CNPJ inválido')
 
         return v
-
-
-class ClientePublico(ClienteBase):
-    id: str
-    ativo: bool
-    data_criacao: datetime
-    ultimo_acesso: datetime | None = None
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ClienteSchema(ClienteBase):
-    pass
 
 
 class ClienteCreateResponse(ClientePublico):
