@@ -1,0 +1,55 @@
+name: Pipeline
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: app_user
+          POSTGRES_PASSWORD: app_password
+          POSTGRES_DB: app_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Copia os arquivos do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Instalar o Poetry
+        run: pipx install poetry
+
+      - name: Instalar dependências
+        run: poetry install
+
+      - name: Gerar modelo mock
+        run: poetry run python mock_model.py
+
+      - name: Executar o linter
+        run: poetry run task lint
+
+      - name: Executar testes
+        run: poetry run task test
+
+    env:
+      DATABASE_URL: "postgresql+asyncpg://app_user:app_password@localhost:5432/app_db"
+      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      ALGORITHM: ${{ secrets.ALGORITHM }}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+      ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      MODEL_PATH: "models/fraud_model.pkl"
