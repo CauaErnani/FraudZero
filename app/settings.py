@@ -11,5 +11,6 @@ class Settings(BaseSettings):
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     MODEL_PATH: str
+    SCALER_PATH: str
     ADMIN_USERNAME: str
     ADMIN_PASSWORD: str

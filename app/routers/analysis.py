@@ -16,7 +16,6 @@ router = APIRouter(prefix='/analysis', tags=['analysis'])
 T_Session = Annotated[AsyncSession, Depends(get_session)]
 T_CurrentUser = Annotated[Cliente, Depends(get_current_user)]
 
-# Ordem exata das features que o modelo espera — deve ser idêntica ao treino
 FEATURE_COLUMNS = [
     'amount',
     'oldbalanceOrg',
@@ -32,7 +31,6 @@ FEATURE_COLUMNS = [
     'type_TRANSFER',
 ]
 
-# Todos os tipos possíveis do PaySim para o One-Hot Encoding
 TRANSACTION_TYPES = [
     'CASH_IN',
     'CASH_OUT',
@@ -43,15 +41,9 @@ TRANSACTION_TYPES = [
 
 
 def build_feature_vector(transacao: TransacaoEntrada) -> np.ndarray:
-    """
-    Recebe os dados brutos da transação e retorna o vetor de features
-    no formato que o modelo XGBoost espera.
-    """
-    # Feature Engineering
     diferenca_saldo_orig = transacao.oldbalanceOrg - transacao.newbalanceOrig
     diferenca_saldo_dest = transacao.newbalanceDest - transacao.oldbalanceDest
 
-    # One-Hot Encoding manual do campo 'type'
     type_encoded = {
         f'type_{t}': 1.0 if transacao.type == t else 0.0
         for t in TRANSACTION_TYPES
@@ -68,7 +60,6 @@ def build_feature_vector(transacao: TransacaoEntrada) -> np.ndarray:
         **type_encoded,
     }
 
-    # Garante a ordem correta das colunas
     vector = np.array([[features[col] for col in FEATURE_COLUMNS]])
     return vector
 
@@ -83,11 +74,13 @@ async def solicitar_analise(
     cliente: T_CurrentUser,
 ):
     model = request.app.state.model
-    feature_vector = build_feature_vector(transacao)
+    scaler = request.app.state.scaler
 
-    # Predição real com XGBoost
-    is_fraud = bool(model.predict(feature_vector)[0])
-    risk_score = float(model.predict_proba(feature_vector)[0][1])
+    feature_vector = build_feature_vector(transacao)
+    feature_vector_scaled = scaler.transform(feature_vector)
+
+    is_fraud = bool(model.predict(feature_vector_scaled)[0])
+    risk_score = float(model.predict_proba(feature_vector_scaled)[0][1])
 
     db_log = LogAnalise(
         dados_entrada=transacao.model_dump_json(),

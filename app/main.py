@@ -11,11 +11,11 @@ settings = Settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: carrega o modelo uma vez e guarda no estado da app
     app.state.model = joblib.load(settings.MODEL_PATH)
+    app.state.scaler = joblib.load(settings.SCALER_PATH)
     yield
-    # Shutdown: limpa o modelo da memória
     del app.state.model
+    del app.state.scaler
 
 
 app = FastAPI(
